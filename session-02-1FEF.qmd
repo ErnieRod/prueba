@@ -1,0 +1,403 @@
+---
+title: "Diseño y Análisis de Experimentos"
+subtitle: "Sesión #2: Diseños Unifactoriales de Efectos Fijos"
+author:
+  - name: Jorge I. Vélez, PhD
+    orcid: 0000-0002-3146-7899
+    url: https://jorgeivanvelez.netlify.app/
+    email: jvelezv@uninorte.edu.co
+    affiliation: 
+      - name: Universidad del Norte, Barranquilla
+date: "8/2/2024"
+lang: es
+self-contained: true
+fontsize: 14pt
+number-sections: false
+toc-depth: 3
+toc-title: "Contenido"
+toc: true
+format: html
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE, message=FALSE}
+## mostrar siempre el código
+knitr::opts_chunk$set(echo = TRUE)
+options(warn = -1)
+```
+
+
+## Descripción del problema
+
+<br>
+
+```{r echo=FALSE, out.width="100%", fig.cap="Pasos de un circuito integrado. Tomado de Montgomery, 9 Edición, pp. 65.", fig.align='center', message=FALSE}
+## availability of knitr
+if(!require(knitr)) install.packages('knitr')
+require(knitr)
+
+## fecth image
+knitr::include_graphics("https://www.dropbox.com/scl/fi/wqdmwjtik7ax225rsem7a/process-ex31.png?rlkey=c5iq7t5m7gla3u68m133zdvbj&st=o6i6f535&dl=1")
+```
+
+
+
+
+## Datos
+
+Los datos, en formato tabla, se presentan a continuación:
+
+```{r echo=FALSE, out.width="100%", fig.cap="Datos del Ejemplo 3.1. Tomado de Montgomery, 9 Edición, pp. 65.", fig.align='center', message=FALSE}
+require(knitr)
+knitr::include_graphics("https://www.dropbox.com/scl/fi/xfsj8phzh0gfoii6gjb40/table31.png?rlkey=sjd9gaytzq2pg7wjhloxtk5gm&st=r2dtm8ue&dl=1")
+```
+
+
+
+## Análisis del Experimento
+
+Para el análisis del experimento se sugieren los siguientes pasos:
+
+1. Lectura de datos
+2. Análisis gráfico
+3. Construcción de la tabla ANOVA
+4. Construcción del modelo de Regresión Lineal Simple/Múltiple
+5. Pruebas simultáneas
+6. Validación de supuestos
+7. Conclusiones
+
+A continuación se desarolla cada paso.
+
+
+### Lectura de datos
+
+Los datos con los que trabajaremos son los siguientes:
+
+```{r}
+## read the data set
+datos <- read.table('https://www.dropbox.com/scl/fi/etgedcthcrxlx6x0nbtad/example31-montgomery-ed9.txt?rlkey=9apf7otzx5jjz6s2vm1921e7k&st=ps1xg2gw&dl=1', 
+                    header = TRUE)
+
+## convert 'power' to factor
+datos$power <- as.factor(datos$power)
+
+## portion of the data
+head(datos, 10)
+```
+
+### Análisis gráfico
+
+Una vez leemos los datos en `R`, el **primer paso** es realizar un análisis gráfico de los resultados del experimento. En un caso como este, lo recomendable es realizar un `boxplot`, un `beanplot` o un `violin`. Ver [este](https://www.r-graph-gallery.com/violin.html) enlace para más detalles.
+
+Por ejemplo, un `boxplot` puede construirse de la siguiente manera:
+
+
+```{r, message=FALSE, fig.width = 5, fig.height = 5, fig.align = 'center'}
+## boxplots for main effects
+boxplot(y ~ power, data = datos, las = 1, col = 2:5, xlab = 'Power (W)', ylab = 'A/min')
+abline(h = mean(datos$y), col = "orange", lwd = 2)
+```
+
+El `beanplot` fue propuesto por [Peter Kampstra](https://www.jstatsoft.org/article/view/v028c01) en 2008 como una alternativa al `boxplot` y al `violin` plot.  El gráfico puede realizarse fácilmente utilizando el paquete [`beanplot`](https://cran.r-project.org/web/packages/beanplot/index.html) creado por el mismo autor. Para más información, puede consultar a ayuda de `?beanplot:::beanplot`.
+
+En nuestro caso, el gráfico puede obtenerse haciendo:
+
+
+```{r message=FALSE, fig.width = 5, fig.height = 5, fig.align = 'center'}
+## check availability of the 'beanplot' package
+if(!require(beanplot)) install.packages('beanplot')
+
+## nice colors
+cols <- c("#0080ff", "#ff00ff", "darkgreen", "#ff0000", 
+          "orange", "#00ff00", "brown")
+with(datos,
+     beanplot(y ~ power, las = 1, horizontal = FALSE, 
+              col = c('white', cols[1], 3, cols[2]), 
+              log = "", what = c(1, 1, 1, 1), cutmin = 500, cutmax = 750,
+              cex.axis = 1.1, 
+              lwd = 2, main = "", 
+              xlab = "Type of display", ylab = 'Sales'))
+```
+
+
+En el caso de visualizar los datos utilizando un `violin` plot podemos proceder de la siguiente manera:
+
+```{r, fig.width = 5, fig.height = 5, fig.align = 'center', message=FALSE}
+## check availability of 'ggplot2' package
+if(!require(ggplot2)) install.packages('ggplot2')
+
+## violin plot
+ggplot(datos, aes(x = power, y = y, fill = power)) +
+  geom_violin(alpha = .5) +
+  geom_point() +
+  geom_jitter() +
+  theme(legend.position = "none") + 
+  ylab("A/min") +
+  xlab("Power (W)") +
+  theme_minimal()
+```
+
+
+Ahora, procedamos a calcular algunas medidas de tendencia central, posición y dispersión:
+
+```{r}
+## measures using tapply
+with(datos, tapply(y, power, mean))
+with(datos, tapply(y, power, sd))
+with(datos, tapply(y, power, summary))
+```
+
+### Construcción de la tabla ANOVA
+
+En este paso hacemos uso de las funciones `lm()` y `anova()`:
+
+
+```{r}
+## ANOVA table
+fit <- lm(y ~ power, data = datos)
+anova(fit)
+```
+
+
+La conclusión de la tabla ANOVA es que existe al menos un tipo de `power` para el que las ventas promedio son superiores o inferiores a los demás.  En otras palabras, esto indica que la variable `power` **afecta** la resistencia.
+
+
+### Construcción del modelo de Regresión 
+
+Aunque el resultado anterior es importante, por lo general interesa determinar **la magnitud del efecto** de cada nivel de `power` sobre las ventas. Esto es posible a partir del objeto `fit`. Para ello utilizamos los estimadores de máxima verosimilitud obtenidos al emplear el método de mínimos cuadrados ordinarios en el modelo de Regresión Lineal Simple:
+
+```{r}
+## SLR with categorical predictor
+summary(fit)
+```
+
+### Pruebas simultáneas
+
+A partir del modelo de Regresión, podemos concluir que utilizar un `power` de `220` mejora considerablemente las resistencia comparado con usar `160`. En particular, utilizar `220` en lugar del tipo `160` incrementa la resistencia en 155.8 A/min. 
+
+
+Qué podemos decir acerca de `180` vs. `200`?  Para responder a esto utilizamos una comparación _ad hoc_.  Esta comparación puede hacerse utilizando la prueba de mínima diferencia significativa de Tukey, también conocida como Tukey's _Honestly Significant Difference_ (HSD):
+
+
+```{r}
+## Honestly Significant Difference (HSD) test
+anova <- aov(fit)
+(hsd <- TukeyHSD(anova, "power", ordered = TRUE))
+```
+
+Los resultados indican que las diferencias  `180`-`200` es  estadísticamente significativa después de aplicar la correción por múltiples comparaciones, es decir, que la columna `p adj` es $<0.05$.
+
+Para visualizar dichas diferencias usamos la función `plot` sobre el objeto `hsd`:
+
+
+```{r, message=FALSE,fig.width = 5, fig.height = 5, fig.align = 'center'}
+## HSD plot
+plot(hsd, las = 1)
+```
+
+La conclusión es **la misma** que obtuvimos al analizar los resultados numéricos.
+
+
+### Validación de Supuestos
+
+En el 1FEF, al igual que en otros DOE, se tienen los siguientes supuestos sobre el error aleatorio, $\epsilon$:
+
+* $\mu_{\epsilon} = 0$, donde $\mu_{\epsilon}$ es la media de $\mathbf{\epsilon}$,
+*  $\epsilon_1, \epsilon_2, \ldots, \epsilon_n$ tiene varianza constante $\sigma^2$,
+*  $\mathbf{\epsilon} \sim N(0, \sigma^2)$,
+*  $\epsilon_i$ y $\epsilon_j$ son independientes para $i\neq j$.
+
+Para más información, pueden consultar la [Sección 2.4](https://jivelez.github.io/book-adii/rls.html#residuales) de texto [_Modelos de Regresión: Una aproximación práctica con R_](https://jivelez.github.io/book-adii/).
+
+En `R` dicha validación se realiza sobre los **residuales** del modelo ajustado.  En nuestro caso, este modelo está contenido en el objeto `fitdidisplays`.  
+
+
+Inicialmente calculamos los residuales del modelo ajustado:
+
+```{r}
+## residuals
+r <- rstudent(fit)
+```
+
+El supuesto de **media cero** podemos validarlo usando una prueba $t$ de Student, aunque no es necesario:
+
+```{r}
+## media cero
+t.test(r, mu = 0)
+```
+
+
+El supuesto de **Normalidad** puede validarse de varias maneras.  En este curso usaremos una prueba formal como la Shapiro-Wilk y un método gráfico basado en el QQ-plot. 
+
+```{r}
+## Shapiro-Wilk normality test
+shapiro.test(r) 
+```
+
+Puesto que el valor $p$ de la prueba es $>0.05$, _no_ rechazamos $H_0$ y concluimos que los errores del modelo ajustado siguen una distribución Normal.
+
+El QQ-plot puede construirse de la siguiente forma:
+
+```{r, fig.align='center', fig.width=5, fig.height=5}
+## QQ-plot
+qqnorm(r, las = 1)
+qqline(r, col = 1, lty = 2)
+```
+
+Cuando se cumple el supuesto de normalidad de los residuales, se espera que los puntos en el gráfico se encuentren _alrededor_ de la línea punteada.  En este caso en particular, el supuesto _parece_ ser razonable.
+
+
+
+El supuesto de **varianza constante** puede validarse, esencialmente, utilizando dos aproximaciones:  una prueba formal y métodos gráficos.  En el curso usaremos la prueba de [Breusch-Pagan](https://www.statology.org/breusch-pagan-test/) implementada a través de la función `ncvTest()` del paquete `car`. 
+
+
+```{r, message=FALSE}
+## check availability of 'car' package
+if(!require(car)) install.packages('car')
+require(car)
+
+## constant variance using Breusch-Pagan
+car:::ncvTest(fit)
+```
+
+Gráficamente podemos proceder de la siguiente manera:
+
+```{r, fig.align='center', fig.height=5, fig.width=7}
+## constant variance (graphical method)
+# r
+par(mfrow = c(1, 2))
+plot(r, las = 1, ylab = 'Residual', xlab = "Observation #", 
+     main = 'Residuals')
+abline(h = 0, col = 2, lty = 2)
+
+# r vs. display
+boxplot(r ~ power, col = cols,
+        las = 1, 
+        ylab = 'Residual', 
+        xlab = "Power (W)", 
+        main = "Power entry",
+        data = datos)
+abline(h = 0, col = 2, lty = 2)
+```
+
+La conclusión general es que los residuales del modelo ajustado **tienen** varianza constante.
+
+
+El supuesto de **independencia** puede validarse, al igual que los supuestos de varianza constante y de normalidad, puede validarse de manera gráfica o haciendo una prueba formal.  Gráficamente se utiliza la función de autocorrelación o ACF en inglés.  En `R` procedemos de la siguiente manera para construir la ACF:
+
+```{r, fig.align='center', fig.height=5, fig.width=5}
+## independence using ACF
+acf(r, las = 1, main = "")
+mtext("ACF", side = 3, line = .2)
+```
+
+La idea general es que, a excepción de la primera barra vertical, _ninguna_ de las barras verticales debe estar por fuera de las líneas horizontales de color azul. 
+
+Para probar independencia de manera formal, usamos la prueba de [Durbin-Watson](https://www.investopedia.com/terms/d/durbin-watson-statistic.asp).  En `R` esta prueba se encuentra implementada en la función `durbinWatsonTest` del paquete `car`:
+
+```{r}
+## independence test using Durbin-Watson
+set.seed(123)
+durbinWatsonTest(fit)
+```
+
+Puesto que el valor $p$ de la prueba es $>0.05$, concluimos que los residuales del modelo ajustado **son** independientes.
+
+Estos resultados indican que los errores del modelo ajustado son independientes, siguen una distribución normal y tienen varianza constante. Por lo tanto, **el modelo y las conclusiones que se deriven de él son válidas**.
+
+
+
+## Estimación del número de réplicas
+
+Cuando usamos un DOE de 1FEF, es importante estimar el número de réplicas $n$ requeridas dentro de  cada nivel del factor $A$.  En términos generales, $n$ depende de
+
+1. El número de niveles del factor $A$, denominado $a$;
+2. la probabilidad de Error Tipo I, $\alpha$;
+3. la potencia $1-\beta$; y
+4. el tamaño de efecto $f$  a detectar. [Cohen (1998)](https://www.amazon.com/Statistical-Power-Analysis-Behavioral-Sciences/dp/0805802835) sugiere que valores de $f$ de 0.1, 0.25 y 0.4 representan tamaños de efecto pequeño, mediano y grande, respectivamente.
+
+
+Para un diseño de 1FEF, el número de réplicas dentro de cada nivel del factor $A$ puede estimarse con la función `pwr.anova.test()` del paquete `pwr`. Para más información, puede consultar [este](https://www.rdocumentation.org/packages/pwr/versions/1.3-0/topics/pwr.anova.test) enlace.
+
+Por ejemplo, si el factor $A$ tiene $k=3$ niveles, $\alpha = 0.05$, el tamaño de efecto a detectar es $f=0.8$ y la potencia deseada es $1-\beta = 0.8$, entonces el número de réplicas **dentro** de cada nivel del factor $A$ puede calcularse en `R` haciendo:
+
+
+```{r, message=FALSE}
+## check availability of 'pwr' package
+if(!require(pwr)) install.packages('pwr')
+require(pwr)
+
+## find n in each group
+pwr.anova.test(k = 3, sig.level = 0.05, power = 0.8, f = 0.8)
+```
+
+Así las cosas, el número de réplicas es  $\approx 7$ y el número total de unidades experimentales es $3\times 7 = 21$.
+
+**Nota:** En la práctica es común evaluar diferentes valores de $f$ y $1-\beta$ con el fin de estudiar la variación de $n$.  Al final, la decisión se toma a partir de los resultados obtenidos y el conocimiento que tiene el ingeniero del problema que está estudiando.
+
+
+## Qué pasa si no conocemos $a$ y $n$?
+
+En casos como estos, podemos realizar un `grid-search`. Esto consiste en utilizar diferentes valores para $a$ y $n$, y determinar la combinación que _cumple_ con la potencia deseada, siempre y cuando se fije un efecto particular:
+
+```{r}
+## parámetros
+a <- c(3, 4, 5, 6, 7)
+n <- c(2, 3, 4, 5, 6)
+f <- 0.8
+
+## loops
+power <- NULL
+for(ai in a){
+  for(nj in n){
+    res <- pwr.anova.test(k = ai, n = nj, f = f, sig.level = 0.05)
+    power <- c(power, res$power)
+  }
+}
+
+## reporte
+d <- expand.grid(a = a, n = n)
+d$power <- power
+head(d)
+```
+
+Por ejemplo, los parámetros básicos para un DOE de 1FEF con $f=0.8$ para una potencia _superior_ a 85% son:
+
+```{r}
+## DOE seleccionado
+subset(d, power > 0.85)
+```
+
+Por lo tanto, existen `r NROW(subset(d, power > 0.85))` diseños, de los `r NROW(d)` evaluados, que cumplen con el requisito de la potencia.
+
+Gráficamente los resultados pueden visualizarse utilizando la función `contour()`:
+
+```{r fig.align='center', fig.width=6, fig.height=6}
+## contour plot
+z <- matrix(d$power, ncol = length(a), nrow = length(n))
+contour(a, n, z, 
+        las = 1,
+        xlab = 'Number of levels', 
+        ylab = 'Number of replicates')
+```
+
+Si queremos visualizar el diseño #20 en el gráfico anterior hacemos:
+
+```{r fig.align='center', fig.width=6, fig.height=6}
+## seleccionando el diseño
+k <- 10
+a_hat <- d[k, 1]
+n_hat <- d[k, 2]
+power_hat <- d[k, 3]
+
+## plot
+contour(a, n, z, 
+        las = 1,
+        xlab = 'Number of levels', 
+        ylab = 'Number of replicates')
+points(a_hat, n_hat, col = 'red', pch = 16, cex = 2)
+segments(a_hat, 0, a_hat, n_hat, lty = 2, col = 'gray70')
+segments(n_hat - 1, n_hat, a_hat, n_hat, lty = 2, col = 'gray70')
+```
+
